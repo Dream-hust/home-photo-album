@@ -391,8 +391,10 @@
         date: item.date,
         caption: item.caption || '',
         src: item.image_url,
+        storagePath: item.storage_path || '',
         createdAt: item.created_at,
-        orderIndex: item.order_index || 0
+        orderIndex: item.order_index || 0,
+        isFeatured: !!item.is_featured
       };
     }
 
@@ -509,21 +511,40 @@
         storyContent.value='';
         render();
       }catch(error){
-        alert('家庭记录暂时没保存成功，请稍后再试。');
+        alert(`家庭记录暂时没保存成功：${error?.message || 'unknown_error'}`);
       }
     }
 
     async function removeStory(id){
-      await supabaseClient.from('home_stories').delete().eq('id', id);
-      state.stories = state.stories.filter(item => item.id !== id);
-      saveState();
-      render();
+      try{
+        const { error } = await supabaseClient.from('home_stories').delete().eq('id', id);
+        if(error) throw error;
+        state.stories = state.stories.filter(item => item.id !== id);
+        saveState();
+        render();
+      }catch(error){
+        alert(`删除家庭记录失败：${error?.message || 'unknown_error'}`);
+      }
     }
+
+    async function deleteStoragePath(path){
+      if(!path) return;
+      const { error } = await supabaseClient.storage.from(STORAGE_BUCKET).remove([path]);
+      if(error) throw error;
+    }
+
     async function removeFeatured(id){
-      await supabaseClient.from('home_photos').delete().eq('id', id);
-      state.featured = state.featured.filter(item => item.id !== id);
-      saveState();
-      render();
+      const item = state.featured.find(entry => entry.id === id);
+      try{
+        const { error } = await supabaseClient.from('home_photos').delete().eq('id', id);
+        if(error) throw error;
+        if(item?.storagePath) await deleteStoragePath(item.storagePath);
+        state.featured = state.featured.filter(entry => entry.id !== id);
+        saveState();
+        render();
+      }catch(error){
+        alert(`删除精选失败：${error?.message || 'unknown_error'}`);
+      }
     }
 
     async function moveFeatured(id, direction){
@@ -534,16 +555,27 @@
       const temp = state.featured[index];
       state.featured[index] = state.featured[target];
       state.featured[target] = temp;
-      await Promise.all(state.featured.map((item, idx) => supabaseClient.from('home_photos').update({ order_index: idx }).eq('id', item.id)));
-      saveState();
-      render();
+      try{
+        await Promise.all(state.featured.map((item, idx) => supabaseClient.from('home_photos').update({ order_index: idx }).eq('id', item.id)));
+        saveState();
+        render();
+      }catch(error){
+        alert(`更新精选顺序失败：${error?.message || 'unknown_error'}`);
+      }
     }
 
     async function removePhoto(id){
-      await supabaseClient.from('home_photos').delete().eq('id', id);
-      state.photos = state.photos.filter(item => item.id !== id);
-      saveState();
-      render();
+      const item = state.photos.find(entry => entry.id === id);
+      try{
+        const { error } = await supabaseClient.from('home_photos').delete().eq('id', id);
+        if(error) throw error;
+        if(item?.storagePath) await deleteStoragePath(item.storagePath);
+        state.photos = state.photos.filter(entry => entry.id !== id);
+        saveState();
+        render();
+      }catch(error){
+        alert(`删除照片失败：${error?.message || 'unknown_error'}`);
+      }
     }
 
     function setBoard(boardId){
