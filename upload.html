@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>家庭相册 - 上传入口</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root{--bg:#241912;--panel:rgba(76,54,41,.78);--line:rgba(222,184,135,.22);--text:#f8efe4;--muted:#d0b69a;--accent:#ddb36c;--accent-strong:#efc884;--danger:#b97b78}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:linear-gradient(rgba(28,20,15,.72),rgba(28,20,15,.78)),url('./photo.jpg') center/cover fixed;color:var(--text);font-family:"PingFang SC","Noto Serif SC","Microsoft YaHei",sans-serif;display:grid;place-items:center;padding:24px}button,input,select,textarea{font:inherit}a{color:inherit}
+    .shell{width:min(860px,100%);display:grid;gap:18px}.panel{background:var(--panel);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:28px;box-shadow:0 24px 60px rgba(0,0,0,.28)}
+    .hero{padding:28px 30px 24px}.eyebrow{display:inline-flex;align-items:center;border:1px solid rgba(239,200,132,.24);border-radius:999px;padding:8px 14px;color:var(--accent-strong);font-size:12px;letter-spacing:.16em;text-transform:uppercase}.hero h1{margin:18px 0 10px;font-size:42px;color:#fff5e8;letter-spacing:.04em}.hero p{margin:0;color:var(--muted);line-height:1.9}
+    .form-panel{padding:24px 26px 28px;display:grid;gap:18px}.grid{display:grid;grid-template-columns:1.1fr .78fr .9fr;gap:14px}.field{display:grid;gap:8px}.field label{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#cfb497}.input,.select,.textarea{width:100%;border:1px solid rgba(221,179,108,.18);background:linear-gradient(180deg, rgba(18,14,12,.34), rgba(18,14,12,.22));color:var(--text);border-radius:18px;padding:13px 15px;outline:none}.select{appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:linear-gradient(180deg, rgba(18,14,12,.34), rgba(18,14,12,.22)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23efc884' d='M6 8 0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat,no-repeat;background-position:center right 16px;background-size:auto,12px 8px;padding-right:40px}.select option{background:#5d4332;color:#fff3e4}.textarea{min-height:110px;resize:vertical}.input:focus,.select:focus,.textarea:focus{border-color:rgba(239,200,132,.4);box-shadow:0 0 0 3px rgba(239,200,132,.08)}
+    .actions{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}.btn{border:0;border-radius:999px;padding:14px 22px;background:linear-gradient(135deg,var(--accent-strong),var(--accent));color:#332117;font-weight:700;cursor:pointer}.btn[disabled]{opacity:.6;cursor:progress}.meta{color:#c8ab8f;font-size:13px}.status{padding:14px 16px;border-radius:16px;background:rgba(24,17,13,.28);border:1px solid rgba(221,179,108,.12);color:#e9d5bf;line-height:1.7;min-height:56px}.back{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#e5c896;text-decoration:none}
+    @media (max-width:760px){.hero h1{font-size:34px}.hero,.form-panel{padding:20px}.grid{grid-template-columns:1fr}.actions{align-items:stretch}.btn{width:100%}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel hero">
+      <span class="eyebrow">Family Upload</span>
+      <h1>上传入口</h1>
+      <p>把今天的照片轻轻放进相册里。上传会自动压缩成更适合网页浏览的版本，方便家人在微信里顺畅查看。</p>
+    </section>
+
+    <section class="panel form-panel">
+      <div class="grid">
+        <div class="field">
+          <label>照片文件</label>
+          <input id="photoFile" class="input" type="file" accept="image/*" />
+        </div>
+        <div class="field">
+          <label>日期</label>
+          <input id="photoDate" class="input" type="date" />
+        </div>
+        <div class="field">
+          <label>所属板块</label>
+          <select id="photoPerson" class="select"></select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>一句说明</label>
+        <input id="photoCaption" class="input" type="text" maxlength="120" placeholder="给这张照片留一句温柔的小注解" />
+      </div>
+
+      <div class="actions">
+        <button id="submitBtn" class="btn" type="button">上传到云端相册</button>
+        <a class="back" href="./index.html">返回家庭相册</a>
+      </div>
+      <div id="status" class="status">准备好后，选一张照片就可以上传。</div>
+      <div class="meta">支持 JPG、PNG、WebP。系统会自动压缩大图，减轻微信和手机浏览压力。</div>
+    </section>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://wbzlnqvwabjgkrtvcebw.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_JpG6OjJnBG4m5CnYRdQmUQ_Sm8WRP7Q';
+    const STORAGE_BUCKET = 'home-photos';
+    const PEOPLE = [
+      { id:'zhangjunrui', name:'张俊睿' },
+      { id:'yangyong', name:'杨勇' },
+      { id:'huaping', name:'华平' },
+      { id:'haihong', name:'海红' },
+      { id:'hanbing', name:'寒冰' },
+      { id:'yeye', name:'爷爷' },
+      { id:'nainai', name:'奶奶' },
+      { id:'hehe', name:'赫赫' },
+      { id:'family', name:'家庭合照' },
+      { id:'daily', name:'日常生活' }
+    ];
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const photoPerson = document.getElementById('photoPerson');
+    const photoFile = document.getElementById('photoFile');
+    const photoDate = document.getElementById('photoDate');
+    const photoCaption = document.getElementById('photoCaption');
+    const submitBtn = document.getElementById('submitBtn');
+    const statusBox = document.getElementById('status');
+    photoPerson.innerHTML = PEOPLE.map(person => `<option value="${person.id}">${person.name}</option>`).join('');
+    photoDate.value = new Date().toISOString().slice(0,10);
+
+    function setStatus(message){ statusBox.textContent = message; }
+    function isSupportedImage(file){
+      const type = (file.type || '').toLowerCase();
+      const name = (file.name || '').toLowerCase();
+      return type.startsWith('image/') && !type.includes('heic') && !name.endsWith('.heic') && !name.endsWith('.heif');
+    }
+    function fileToDataUrl(file){
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('read_failed'));
+        reader.readAsDataURL(file);
+      });
+    }
+    function loadImageElement(src){
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('image_decode_failed'));
+        img.src = src;
+      });
+    }
+    function canvasToJpegBlob(canvas, quality){
+      return new Promise((resolve, reject) => {
+        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('canvas_export_failed')), 'image/jpeg', quality);
+      });
+    }
+    async function prepareImageForUpload(file){
+      const dataUrl = await fileToDataUrl(file);
+      const img = await loadImageElement(dataUrl);
+      const maxSide = 1800;
+      const longest = Math.max(img.naturalWidth, img.naturalHeight);
+      const scale = longest > maxSide ? maxSide / longest : 1;
+      const width = Math.max(1, Math.round(img.naturalWidth * scale));
+      const height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d', { alpha:false });
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+      let quality = 0.86;
+      let blob = await canvasToJpegBlob(canvas, quality);
+      const maxBytes = 1.6 * 1024 * 1024;
+      while(blob.size > maxBytes && quality > 0.55){
+        quality -= 0.08;
+        blob = await canvasToJpegBlob(canvas, quality);
+      }
+      return { blob, width, height };
+    }
+    async function uploadToStorage(file){
+      const optimized = await prepareImageForUpload(file);
+      const path = `photos/${Date.now()}-${crypto.randomUUID()}.jpg`;
+      const uploadResult = await supabaseClient.storage.from(STORAGE_BUCKET).upload(path, optimized.blob, {
+        upsert:false,
+        contentType:'image/jpeg',
+        cacheControl:'3600'
+      });
+      if(uploadResult.error) throw new Error(uploadResult.error.message || 'storage_upload_failed');
+      const { data } = supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+      return { path, publicUrl:data.publicUrl };
+    }
+
+    submitBtn.addEventListener('click', async () => {
+      const file = photoFile.files && photoFile.files[0];
+      if(!file) return setStatus('先选一张照片。');
+      if(!isSupportedImage(file)) return setStatus('这张图片格式不支持，建议使用 JPG、PNG、WebP。');
+      const previous = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.textContent = '上传中...';
+      setStatus('正在处理并上传照片...');
+      try{
+        const uploaded = await uploadToStorage(file);
+        const payload = {
+          person_id: photoPerson.value,
+          date: photoDate.value || new Date().toISOString().slice(0,10),
+          caption: photoCaption.value.trim(),
+          image_url: uploaded.publicUrl,
+          storage_path: uploaded.path,
+          is_featured: false,
+          order_index: 0
+        };
+        const { error } = await supabaseClient.from('home_photos').insert(payload);
+        if(error) throw error;
+        photoFile.value = '';
+        photoCaption.value = '';
+        setStatus('上传成功。回到家庭相册页后刷新一下，就能看到新照片。');
+      }catch(error){
+        setStatus(`上传失败：${error.message || 'unknown_error'}`);
+      }finally{
+        submitBtn.disabled = false;
+        submitBtn.textContent = previous;
+      }
+    });
+  </script>
+</body>
+</html>

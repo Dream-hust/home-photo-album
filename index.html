@@ -75,7 +75,7 @@
   <div class="shell" id="appShell" style="display:none;">
     <header class="topbar panel">
       <div class="brand"><b>家庭相册</b></div>
-      <nav class="nav"><a href="#home">首页</a><a href="#featured">精选集锦</a><a href="#people">成员入口</a><a href="#upload">上传照片</a></nav>
+      <nav class="nav"><a href="#home">首页</a><a href="#featured">精选集锦</a><a href="#people">成员入口</a><a href="./upload.html">上传入口</a></nav>
     </header>
 
     <section class="hero" id="home">
@@ -163,6 +163,7 @@
     <section class="panel section" id="upload">
       <div class="section-head"><div><h2>上传照片</h2><p>把新的日子轻轻放进这个家。</p></div></div>
       <div class="upload-memory-intro"><b>像把一张新照片轻轻夹进册页里</b><span>上传不只是保存文件，而是在把今天安静地放进这个家的记忆里。多年以后回头看，这些片刻会替我们记住当时的光线、笑容和陪伴。</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px"><span style="color:#cfb497;font-size:13px;line-height:1.8">现在家庭相册已经切到云端读取。更简单的上传可以直接走单独的上传入口。</span><a href="./upload.html" class="btn small ghost" style="text-decoration:none">打开上传入口</a></div>
       <div class="upload-grid">
         <div class="field"><label>照片文件</label><input class="input" type="file" id="photoFile" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp" /></div>
         <div class="field"><label>日期</label><input class="input" type="date" id="photoDate" /></div>
@@ -345,41 +346,24 @@
       setTimeout(() => familyPassword.focus(), 50);
     }
 
-    function loadLegacyState(){
-      const empty = { photos: [], stories: [], featured: [] };
-      const candidates = [LS_KEY, ...LEGACY_KEYS];
-      for(const key of candidates){
-        try{
-          const raw = localStorage.getItem(key);
-          if(!raw) continue;
-          const parsed = JSON.parse(raw);
-          return {
-            photos: Array.isArray(parsed.photos) ? parsed.photos : [],
-            stories: Array.isArray(parsed.stories) ? parsed.stories : [],
-            featured: Array.isArray(parsed.featured) ? parsed.featured : []
-          };
-        }catch{}
-      }
-      return empty;
-    }
-
     async function hydrateFromCloud(){
       try{
         const [photosRes, storiesRes] = await Promise.all([
-          supabaseClient.from('home_photos').select('*').order('date', { ascending:false }).order('created_at', { ascending:false }),
+          supabaseClient.from('home_photos').select('*').order('is_featured', { ascending:false }).order('order_index', { ascending:true }).order('date', { ascending:false }).order('created_at', { ascending:false }),
           supabaseClient.from('home_stories').select('*').order('date', { ascending:false }).order('created_at', { ascending:false })
         ]);
         if(photosRes.error || storiesRes.error) throw photosRes.error || storiesRes.error;
         state.photos = (photosRes.data || []).filter(item => !item.is_featured).map(mapCloudPhoto);
-        state.featured = (photosRes.data || []).filter(item => item.is_featured).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0)).map(mapCloudPhoto);
+        state.featured = (photosRes.data || []).filter(item => item.is_featured).sort((a, b) => (a.order_index || 0) - (b.order_index || 0)).map(mapCloudPhoto);
         state.stories = (storiesRes.data || []).map(item => ({ id:item.id, date:item.date, title:item.title, content:item.content, createdAt:item.created_at }));
         cloudReady = true;
         render();
       }catch(error){
-        const legacy = loadLegacyState();
-        state.photos = legacy.photos;
-        state.featured = legacy.featured;
-        state.stories = legacy.stories;
+        console.error('hydrate_from_cloud_failed', error);
+        state.photos = [];
+        state.featured = [];
+        state.stories = [];
+        cloudReady = false;
         render();
       }
     }
@@ -399,12 +383,7 @@
     }
 
     function saveState(){
-      try{
-        localStorage.setItem(LS_KEY, JSON.stringify(state));
-        return true;
-      }catch(error){
-        return false;
-      }
+      return true;
     }
 
     async function uploadToStorage(file){
