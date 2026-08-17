@@ -410,11 +410,12 @@
       const safeExt = ext === 'jpeg' ? 'jpg' : ext;
       const mimeType = file.type || `image/${safeExt === 'jpg' ? 'jpeg' : safeExt}`;
       const path = `photos/${Date.now()}-${crypto.randomUUID()}.${safeExt}`;
-      const { error } = await supabaseClient.storage.from(STORAGE_BUCKET).upload(path, file, {
+      const uploadResult = await supabaseClient.storage.from(STORAGE_BUCKET).upload(path, file, {
         upsert:false,
         contentType: mimeType,
         cacheControl:'3600'
       });
+      if(uploadResult.error) throw new Error(`storage_upload_failed: ${uploadResult.error.message || 'unknown'}`);
       if(error) throw error;
       const { data } = supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(path);
       return { path, publicUrl: data.publicUrl };
@@ -446,8 +447,9 @@
           is_featured: !!isFeatured,
           order_index: isFeatured ? state.featured.length : 0
         };
-        const { data, error } = await supabaseClient.from('home_photos').insert(payload).select().single();
-        if(error) throw error;
+        const insertResult = await supabaseClient.from('home_photos').insert(payload).select().single();
+        if(insertResult.error) throw new Error(`db_insert_failed: ${insertResult.error.message || 'unknown'}`);
+        const { data } = insertResult;
         const mapped = mapCloudPhoto(data);
         cloudReady = true;
         if(isFeatured) state.featured.unshift(mapped); else state.photos.unshift(mapped);
@@ -462,8 +464,12 @@
           alert('云端权限还没有完全放开，所以这张照片暂时上传失败。我会继续修权限配置。');
         }else if(message.includes('mime') || message.includes('contentType') || message.includes('invalid')){
           alert('这张图片的文件类型没有被云端正确接受，建议换一张标准 JPG 或 PNG 再试。');
+        }else if(message.includes('db_insert_failed')){
+          alert(`云端数据库写入失败：${message}`);
+        }else if(message.includes('storage_upload_failed')){
+          alert(`云端存储上传失败：${message}`);
         }else{
-          alert('这张照片暂时没能上传到云端，请稍后再试。');
+          alert(`这张照片暂时没能上传到云端：${message || 'unknown_error'}`);
         }
       }finally{
         button.disabled = false;
