@@ -416,7 +416,6 @@
         cacheControl:'3600'
       });
       if(uploadResult.error) throw new Error(`storage_upload_failed: ${uploadResult.error.message || 'unknown'}`);
-      if(error) throw error;
       const { data } = supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(path);
       return { path, publicUrl: data.publicUrl };
     }
