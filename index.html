@@ -63,6 +63,20 @@
     </div>
   </div>
 
+  <div class="gate hidden" id="adminGate">
+    <div class="gate-card">
+      <div class="eyebrow">Admin Access</div>
+      <h1 class="gate-title" style="font-size:48px;">管理员入口</h1>
+      <p class="gate-sub">只有管理员可以审核精选、上传精选、调整精选顺序和管理关键内容。</p>
+      <div class="gate-form">
+        <input class="input" id="adminPassword" type="password" placeholder="请输入管理员密码" autocomplete="current-password" />
+        <button class="btn primary" id="adminUnlockBtn" type="button">进入管理员模式</button>
+      </div>
+      <div class="gate-error" id="adminGateError"></div>
+      <div class="gate-note">进入管理员模式后，页面会显示精选审核与精选管理功能。</div>
+    </div>
+  </div>
+
   <div class="shell" id="appShell" style="display:none;">
     <header class="topbar panel">
       <div class="brand"><b>家庭相册</b></div>
