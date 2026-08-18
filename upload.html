@@ -8,7 +8,7 @@
   <style>
     :root{--bg:#241912;--panel:rgba(76,54,41,.78);--line:rgba(222,184,135,.22);--text:#f8efe4;--muted:#d0b69a;--accent:#ddb36c;--accent-strong:#efc884;--danger:#b97b78}
     *{box-sizing:border-box}body{margin:0;min-height:100vh;background:linear-gradient(rgba(28,20,15,.72),rgba(28,20,15,.78)),url('./photo.jpg') center/cover fixed;color:var(--text);font-family:"PingFang SC","Noto Serif SC","Microsoft YaHei",sans-serif;display:grid;place-items:center;padding:24px}button,input,select,textarea{font:inherit}a{color:inherit}
-    .shell{width:min(860px,100%);display:grid;gap:18px}.panel{background:var(--panel);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:28px;box-shadow:0 24px 60px rgba(0,0,0,.28)}
+    .shell{width:min(860px,100%);display:grid;gap:18px}.shell.hidden{display:none}.panel{background:var(--panel);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:28px;box-shadow:0 24px 60px rgba(0,0,0,.28)}
     .hero{padding:28px 30px 24px}.eyebrow{display:inline-flex;align-items:center;border:1px solid rgba(239,200,132,.24);border-radius:999px;padding:8px 14px;color:var(--accent-strong);font-size:12px;letter-spacing:.16em;text-transform:uppercase}.hero h1{margin:18px 0 10px;font-size:42px;color:#fff5e8;letter-spacing:.04em}.hero p{margin:0;color:var(--muted);line-height:1.9}
     .form-panel{padding:24px 26px 28px;display:grid;gap:18px}.grid{display:grid;grid-template-columns:1.1fr .78fr .9fr;gap:14px}.field{display:grid;gap:8px}.field label{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#cfb497}.input,.select,.textarea{width:100%;border:1px solid rgba(221,179,108,.18);background:linear-gradient(180deg, rgba(18,14,12,.34), rgba(18,14,12,.22));color:var(--text);border-radius:18px;padding:13px 15px;outline:none}.select{appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:linear-gradient(180deg, rgba(18,14,12,.34), rgba(18,14,12,.22)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23efc884' d='M6 8 0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat,no-repeat;background-position:center right 16px;background-size:auto,12px 8px;padding-right:40px}.select option{background:#5d4332;color:#fff3e4}.textarea{min-height:110px;resize:vertical}.input:focus,.select:focus,.textarea:focus{border-color:rgba(239,200,132,.4);box-shadow:0 0 0 3px rgba(239,200,132,.08)}
     .actions{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}.btn{border:0;border-radius:999px;padding:14px 22px;background:linear-gradient(135deg,var(--accent-strong),var(--accent));color:#332117;font-weight:700;cursor:pointer}.btn[disabled]{opacity:.6;cursor:progress}.meta{color:#c8ab8f;font-size:13px}.status{padding:14px 16px;border-radius:16px;background:rgba(24,17,13,.28);border:1px solid rgba(221,179,108,.12);color:#e9d5bf;line-height:1.7;min-height:56px}.back{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#e5c896;text-decoration:none}
@@ -16,7 +16,18 @@
   </style>
 </head>
 <body>
-  <div class="shell">
+  <div class="gate-wrap" id="gateWrap">
+    <div class="gate-card">
+      <div class="eyebrow">Private Family Access</div>
+      <div class="gate-title">上传入口</div>
+      <p class="gate-sub">先输入家庭密码，再把今天的照片放进相册里。</p>
+      <input id="familyPassword" class="input" type="password" placeholder="请输入家庭密码" autocomplete="current-password" />
+      <div class="gate-actions"><button id="unlockBtn" class="btn" type="button">进入上传入口</button></div>
+      <div id="gateError" class="gate-error"></div>
+      <div class="gate-note">每次打开都需要重新输入密码，方便家里人微信里临时使用。</div>
+    </div>
+  </div>
+  <div class="shell hidden" id="appShell">
     <section class="panel hero">
       <span class="eyebrow">Family Upload</span>
       <h1>上传入口</h1>
@@ -80,6 +91,12 @@
     photoDate.value = new Date().toISOString().slice(0,10);
 
     function setStatus(message){ statusBox.textContent = message; }
+    function showGate(){ gateWrap.classList.remove('hidden'); appShell.classList.add('hidden'); }
+    function openApp(){ gateWrap.classList.add('hidden'); appShell.classList.remove('hidden'); }
+    function tryUnlock(){ const value = familyPassword.value.trim(); if(!value) return gateError.textContent = '请先输入家庭密码。'; if(value !== FAMILY_PASSWORD) return gateError.textContent = '密码不对，再试一次。'; gateError.textContent = ''; openApp(); }
+    unlockBtn.addEventListener('click', tryUnlock);
+    familyPassword.addEventListener('keydown', (event) => { if(event.key === 'Enter') tryUnlock(); });
+    showGate();
     function isSupportedImage(file){
       const type = (file.type || '').toLowerCase();
       const name = (file.name || '').toLowerCase();

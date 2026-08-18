@@ -59,14 +59,14 @@
         <button class="btn primary" id="unlockBtn" type="button">进入相册</button>
       </div>
       <div class="gate-error" id="gateError"></div>
-      <div class="gate-note">同一台设备验证成功后，会自动记住一段时间，方便家人在微信里直接打开。</div>
+      <div class="gate-note">每次打开都需要重新输入密码，点右上角退出也会立刻回到这里。</div>
     </div>
   </div>
 
   <div class="shell" id="appShell" style="display:none;">
     <header class="topbar panel">
       <div class="brand"><b>家庭相册</b></div>
-      <nav class="nav"><a href="#home">首页</a><a href="#featured">精选集锦</a><a href="#people">成员入口</a><a href="./upload.html">上传入口</a></nav>
+      <nav class="nav"><a href="#home">首页</a><a href="#featured">精选集锦</a><a href="#people">成员入口</a><a href="./upload.html">上传入口</a><button class="logout-pill" id="logoutBtn" type="button">退出登录</button></nav>
     </header>
 
     <section class="hero" id="home">
@@ -156,6 +156,7 @@
     const ACCESS_KEY = 'home-photo-access';
     const ACCESS_TTL = 1000 * 60 * 60 * 24 * 14;
     const FAMILY_PASSWORD = 'homephoto2026';
+    const ADMIN_PASSWORD = 'junruiadmin2026';
     const WISHES = ['愿每一次相聚都被认真留下，愿每一张照片都能替我们记住温暖。','愿多年以后再翻开这些照片时，我们依然能想起当时的笑声。','愿这个小小的相册，把一家人的温柔慢慢收藏起来。'];
     const PEOPLE = [
       { id:'zhangjunrui', name:'张俊睿' },
@@ -175,6 +176,8 @@
 
     const familyGate = document.getElementById('familyGate');
     const appShell = document.getElementById('appShell');
+    let isUnlocked = false;
+    let isAdmin = false;
     const familyPassword = document.getElementById('familyPassword');
     const unlockBtn = document.getElementById('unlockBtn');
     const gateError = document.getElementById('gateError');
@@ -182,6 +185,7 @@
     const featuredGrid = document.getElementById('featuredGrid');
     const reviewList = document.getElementById('reviewList');
     const boardView = document.getElementById('boardView');
+    const logoutBtn = document.getElementById('logoutBtn');
     const boardGallery = document.getElementById('boardGallery');
     const boardStories = document.getElementById('boardStories');
     const boardTitle = document.getElementById('boardTitle');
@@ -201,15 +205,18 @@
       try { document.getElementById('backBtn')?.addEventListener('click', () => setBoard(null)); } catch {}
       try { closeModalBtn?.addEventListener('click', closeModal); } catch {}
       try { imageModal?.addEventListener('click', (event) => { if(event.target === imageModal) closeModal(); }); } catch {}
+      try { logoutBtn?.addEventListener('click', logoutSite); } catch {}
       try { const wishBox = document.getElementById('wishBox'); if(wishBox) wishBox.textContent = WISHES[Math.floor(Math.random() * WISHES.length)]; } catch {}
 
       initAccess();
       hydrateFromCloud();
     };
 
-    function initAccess(){ try{ if(hasAccess()) openSite(); else closeSite(); }catch{ closeSite(); } }
+    function initAccess(){ try{ clearAccess(); isUnlocked = false; isAdmin = false; closeSite(); }catch{ closeSite(); } }
     function hasAccess(){ try{ const raw = localStorage.getItem(ACCESS_KEY); if(!raw) return false; const parsed = JSON.parse(raw); return !!(parsed && parsed.until && Date.now() < parsed.until); }catch{return false;} }
-    function unlockSite(){ try{ const value = familyPassword?.value.trim() || ''; if(!value){ gateError.textContent='请先输入家庭密码。'; return; } if(value !== FAMILY_PASSWORD){ gateError.textContent='密码不对，再试一次。'; return; } localStorage.setItem(ACCESS_KEY, JSON.stringify({ until: Date.now() + ACCESS_TTL })); gateError.textContent=''; openSite(); }catch(error){ gateError.textContent = error?.message || '无法解锁'; } }
+    function clearAccess(){ try{ localStorage.removeItem(ACCESS_KEY); }catch{} }
+    function unlockSite(){ try{ const value = familyPassword?.value.trim() || ''; if(!value){ gateError.textContent='请先输入家庭密码。'; return; } if(value !== FAMILY_PASSWORD){ gateError.textContent='密码不对，再试一次。'; return; } isUnlocked = true; isAdmin = false; gateError.textContent=''; openSite(); }catch(error){ gateError.textContent = error?.message || '无法解锁'; } }
+    function logoutSite(){ try{ isUnlocked = false; isAdmin = false; clearAccess(); closeSite(); render(); }catch(error){ console.error('logout_failed', error); } }
     function openSite(){ try{ familyGate?.classList.add('hidden'); if(appShell) appShell.style.display=''; document.body.classList.remove('locked'); render(); }catch(error){ console.error('open_site_failed', error); document.body.classList.remove('locked'); } }
     function closeSite(){ try{ familyGate?.classList.remove('hidden'); if(appShell) appShell.style.display='none'; document.body.classList.add('locked'); if(familyPassword){ familyPassword.value=''; setTimeout(() => familyPassword.focus(), 50); } }catch(error){ console.error('close_site_failed', error); } }
 
@@ -283,6 +290,8 @@
       document.getElementById('photoCount').textContent = allPhotos.length;
       document.getElementById('dayCount').textContent = new Set([...allPhotos.map(p => p.date), ...state.stories.map(s => s.date)]).size || 0;
       document.getElementById('latestDay').textContent = allPhotos[0]?.date || state.stories[0]?.date || '-';
+      const adminBadge = document.getElementById('adminBadge');
+      if(adminBadge) adminBadge.textContent = isAdmin ? '管理员模式' : '家庭成员模式';
       peopleGrid.innerHTML = PEOPLE.map(person => {
         const personPhotos = allPhotos.filter(photo => photo.personId === person.id);
         const latest = personPhotos[0]?.date || '-';
@@ -309,6 +318,7 @@
     }
 
     function renderReviews(){
+      if(!isAdmin){ reviewList.innerHTML = `<div class="empty">管理员登录后才会显示精选审核区。</div>`; return; }
       const pending = state.photos.filter(item => item.featureRequestStatus === 'pending');
       if(!pending.length){ reviewList.innerHTML = `<div class="empty">暂时没有待审核的精选申请。</div>`; return; }
       reviewList.innerHTML = pending.map(item => {
@@ -340,12 +350,13 @@
       boardGallery.querySelectorAll('img[data-full]').forEach(img => img.addEventListener('click', () => openModal(img.dataset.full, img.dataset.caption)));
       boardGallery.querySelectorAll('[data-remove-photo]').forEach(btn => btn.addEventListener('click', () => removePhoto(btn.dataset.removePhoto)));
       boardGallery.querySelectorAll('[data-request-feature]').forEach(btn => btn.addEventListener('click', () => requestFeature(btn.dataset.requestFeature)));
-      boardStories.innerHTML = stories.length ? stories.map(item => `<article class="story-card"><div class="story-head"><b>${escapeHtml(item.title)}</b><span class="story-date">${item.date}</span></div><p>${escapeHtml(item.content)}</p></article>`).join('') : `<div class="empty">这一页暂时还没有记录。</div>`;
+      boardStories.innerHTML = stories.length ? stories.map(item => `<article class="story-card"><div class="story-head"><b>${escapeHtml(item.title)}</b><span class="story-date">${item.date}</span></div><p>${escapeHtml(item.content)}</p>${isAdmin ? `<div style="margin-top:14px"><button class="btn small danger" type="button" data-remove-story="${item.id}">删除</button></div>` : ''}</article>`).join('') : `<div class="empty">这一页暂时还没有记录。</div>`;
     }
 
     function renderPhotoCard(item, fallbackName, isFeatured){
       const requestArea = isFeatured ? '' : renderFeatureRequestArea(item);
-      return `<article class="photo-card${isFeatured ? ' featured-in-board' : ''}"><img class="photo-thumb" src="${item.src}" alt="${escapeHtml(item.caption || fallbackName)}" data-full="${item.src}" data-caption="${escapeHtml(item.caption || '愿这一刻被温柔记住。')}" /><div class="photo-body"><div class="photo-title">${escapeHtml(item.caption || '愿每一张照片都留下温度。')}</div><div class="photo-meta">${item.date || '-'}${isFeatured ? ' · 精选' : ''}</div><div class="photo-actions">${requestArea}<button class="btn small danger" type="button" data-remove-photo="${item.id}">删除</button></div></div></article>`;
+      const adminActions = isAdmin ? `<button class="btn small danger" type="button" data-remove-photo="${item.id}">删除</button>` : '';
+      return `<article class="photo-card${isFeatured ? ' featured-in-board' : ''}"><img class="photo-thumb" src="${item.src}" alt="${escapeHtml(item.caption || fallbackName)}" data-full="${item.src}" data-caption="${escapeHtml(item.caption || '愿这一刻被温柔记住。')}" /><div class="photo-body"><div class="photo-title">${escapeHtml(item.caption || '愿每一张照片都留下温度。')}</div><div class="photo-meta">${item.date || '-'}${isFeatured ? ' · 精选' : ''}</div><div class="photo-actions">${requestArea}${adminActions}</div></div></article>`;
     }
 
     function renderFeatureRequestArea(item){
@@ -357,7 +368,7 @@
     }
 
     function renderStories(){
-      storyList.innerHTML = state.stories.length ? state.stories.map(item => `<article class="story-card"><div class="story-head"><b>${escapeHtml(item.title)}</b><span class="story-date">${item.date}</span></div><p>${escapeHtml(item.content)}</p><div style="margin-top:14px"><button class="btn small danger" type="button" data-remove-story="${item.id}">删除</button></div></article>`).join('') : `<div class="empty">空白处留给新的家庭记忆。</div>`;
+      storyList.innerHTML = state.stories.length ? state.stories.map(item => `<article class="story-card"><div class="story-head"><b>${escapeHtml(item.title)}</b><span class="story-date">${item.date}</span></div><p>${escapeHtml(item.content)}</p><div style="margin-top:14px">${isAdmin ? `<button class="btn small danger" type="button" data-remove-story="${item.id}">删除</button>` : ''}</div></article>`).join('') : `<div class="empty">空白处留给新的家庭记忆。</div>`;
       storyList.querySelectorAll('[data-remove-story]').forEach(btn => btn.addEventListener('click', () => removeStory(btn.dataset.removeStory)));
     }
 
