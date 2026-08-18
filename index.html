@@ -151,7 +151,7 @@
   <script>
     const SUPABASE_URL = 'https://wbzlnqvwabjgkrtvcebw.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_JpG6OjJnBG4m5CnYRdQmUQ_Sm8WRP7Q';
-    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const supabaseClient = window.supabase?.createClient ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
     const STORAGE_BUCKET = 'home-photos';
     const ACCESS_KEY = 'home-photo-access';
     const ACCESS_TTL = 1000 * 60 * 60 * 24 * 14;
@@ -195,23 +195,26 @@
     const modalCaption = document.getElementById('modalCaption');
     const closeModalBtn = document.getElementById('closeModalBtn');
 
-    unlockBtn.addEventListener('click', unlockSite);
-    familyPassword.addEventListener('keydown', (event) => { if(event.key === 'Enter') unlockSite(); });
-    document.getElementById('backBtn').addEventListener('click', () => setBoard(null));
-    closeModalBtn.addEventListener('click', closeModal);
-    imageModal.addEventListener('click', (event) => { if(event.target === imageModal) closeModal(); });
-    document.getElementById('wishBox').textContent = WISHES[Math.floor(Math.random() * WISHES.length)];
+    const boot = () => {
+      try { unlockBtn?.addEventListener('click', unlockSite); } catch {}
+      try { familyPassword?.addEventListener('keydown', (event) => { if(event.key === 'Enter') unlockSite(); }); } catch {}
+      try { document.getElementById('backBtn')?.addEventListener('click', () => setBoard(null)); } catch {}
+      try { closeModalBtn?.addEventListener('click', closeModal); } catch {}
+      try { imageModal?.addEventListener('click', (event) => { if(event.target === imageModal) closeModal(); }); } catch {}
+      try { const wishBox = document.getElementById('wishBox'); if(wishBox) wishBox.textContent = WISHES[Math.floor(Math.random() * WISHES.length)]; } catch {}
 
-    initAccess();
-    hydrateFromCloud();
+      initAccess();
+      hydrateFromCloud();
+    };
 
-    function initAccess(){ if(hasAccess()) openSite(); else closeSite(); }
+    function initAccess(){ try{ if(hasAccess()) openSite(); else closeSite(); }catch{ closeSite(); } }
     function hasAccess(){ try{ const raw = localStorage.getItem(ACCESS_KEY); if(!raw) return false; const parsed = JSON.parse(raw); return !!(parsed && parsed.until && Date.now() < parsed.until); }catch{return false;} }
-    function unlockSite(){ const value = familyPassword.value.trim(); if(!value){ gateError.textContent='请先输入家庭密码。'; return; } if(value !== FAMILY_PASSWORD){ gateError.textContent='密码不对，再试一次。'; return; } localStorage.setItem(ACCESS_KEY, JSON.stringify({ until: Date.now() + ACCESS_TTL })); gateError.textContent=''; openSite(); }
-    function openSite(){ familyGate.classList.add('hidden'); appShell.style.display=''; document.body.classList.remove('locked'); render(); }
-    function closeSite(){ familyGate.classList.remove('hidden'); appShell.style.display='none'; document.body.classList.add('locked'); familyPassword.value=''; setTimeout(() => familyPassword.focus(), 50); }
+    function unlockSite(){ try{ const value = familyPassword?.value.trim() || ''; if(!value){ gateError.textContent='请先输入家庭密码。'; return; } if(value !== FAMILY_PASSWORD){ gateError.textContent='密码不对，再试一次。'; return; } localStorage.setItem(ACCESS_KEY, JSON.stringify({ until: Date.now() + ACCESS_TTL })); gateError.textContent=''; openSite(); }catch(error){ gateError.textContent = error?.message || '无法解锁'; } }
+    function openSite(){ try{ familyGate?.classList.add('hidden'); if(appShell) appShell.style.display=''; document.body.classList.remove('locked'); render(); }catch(error){ console.error('open_site_failed', error); document.body.classList.remove('locked'); } }
+    function closeSite(){ try{ familyGate?.classList.remove('hidden'); if(appShell) appShell.style.display='none'; document.body.classList.add('locked'); if(familyPassword){ familyPassword.value=''; setTimeout(() => familyPassword.focus(), 50); } }catch(error){ console.error('close_site_failed', error); } }
 
     async function hydrateFromCloud(){
+      if(!supabaseClient){ render(); return; }
       try{
         const [photosRes, storiesRes] = await Promise.all([
           supabaseClient.from('home_photos').select('*').order('is_featured', { ascending:false }).order('order_index', { ascending:true }).order('date', { ascending:false }).order('created_at', { ascending:false }),
@@ -234,13 +237,13 @@
     }
 
     async function removeStory(id){
-      try{ const { error } = await supabaseClient.from('home_stories').delete().eq('id', id); if(error) throw error; state.stories = state.stories.filter(item => item.id !== id); render(); }catch(error){ alert(`删除家庭记录失败：${error?.message || 'unknown_error'}`); }
+      try{ if(!supabaseClient) throw new Error('Supabase 未加载'); const { error } = await supabaseClient.from('home_stories').delete().eq('id', id); if(error) throw error; state.stories = state.stories.filter(item => item.id !== id); render(); }catch(error){ alert(`删除家庭记录失败：${error?.message || 'unknown_error'}`); }
     }
 
-    async function deleteStoragePath(path){ if(!path) return; const { error } = await supabaseClient.storage.from(STORAGE_BUCKET).remove([path]); if(error) throw error; }
-    async function removeFeatured(id){ const item = state.featured.find(entry => entry.id === id); try{ const { error } = await supabaseClient.from('home_photos').update({ is_featured:false, order_index:0 }).eq('id', id); if(error) throw error; state.featured = state.featured.filter(entry => entry.id !== id); if(item){ item.isFeatured = false; item.featureRequestStatus = 'approved'; state.photos.unshift(item); } render(); }catch(error){ alert(`取消精选失败：${error?.message || 'unknown_error'}`); } }
-    async function moveFeatured(id, direction){ const index = state.featured.findIndex(item => item.id === id); if(index < 0) return; const target = index + direction; if(target < 0 || target >= state.featured.length) return; const temp = state.featured[index]; state.featured[index] = state.featured[target]; state.featured[target] = temp; try{ await Promise.all(state.featured.map((item, idx) => supabaseClient.from('home_photos').update({ order_index: idx }).eq('id', item.id))); render(); }catch(error){ alert(`更新精选顺序失败：${error?.message || 'unknown_error'}`); } }
-    async function removePhoto(id){ const item = state.photos.find(entry => entry.id === id); try{ const { error } = await supabaseClient.from('home_photos').delete().eq('id', id); if(error) throw error; if(item?.storagePath) await deleteStoragePath(item.storagePath); state.photos = state.photos.filter(entry => entry.id !== id); render(); }catch(error){ alert(`删除照片失败：${error?.message || 'unknown_error'}`); } }
+    async function deleteStoragePath(path){ if(!path || !supabaseClient) return; const { error } = await supabaseClient.storage.from(STORAGE_BUCKET).remove([path]); if(error) throw error; }
+    async function removeFeatured(id){ const item = state.featured.find(entry => entry.id === id); try{ if(!supabaseClient) throw new Error('Supabase 未加载'); const { error } = await supabaseClient.from('home_photos').update({ is_featured:false, order_index:0 }).eq('id', id); if(error) throw error; state.featured = state.featured.filter(entry => entry.id !== id); if(item){ item.isFeatured = false; item.featureRequestStatus = 'approved'; state.photos.unshift(item); } render(); }catch(error){ alert(`取消精选失败：${error?.message || 'unknown_error'}`); } }
+    async function moveFeatured(id, direction){ const index = state.featured.findIndex(item => item.id === id); if(index < 0) return; const target = index + direction; if(target < 0 || target >= state.featured.length) return; const temp = state.featured[index]; state.featured[index] = state.featured[target]; state.featured[target] = temp; try{ if(!supabaseClient) throw new Error('Supabase 未加载'); await Promise.all(state.featured.map((item, idx) => supabaseClient.from('home_photos').update({ order_index: idx }).eq('id', item.id))); render(); }catch(error){ alert(`更新精选顺序失败：${error?.message || 'unknown_error'}`); } }
+    async function removePhoto(id){ const item = state.photos.find(entry => entry.id === id); try{ if(!supabaseClient) throw new Error('Supabase 未加载'); const { error } = await supabaseClient.from('home_photos').delete().eq('id', id); if(error) throw error; if(item?.storagePath) await deleteStoragePath(item.storagePath); state.photos = state.photos.filter(entry => entry.id !== id); render(); }catch(error){ alert(`删除照片失败：${error?.message || 'unknown_error'}`); } }
 
     async function requestFeature(id){
       try{
@@ -348,7 +351,7 @@
     function renderFeatureRequestArea(item){
       const status = item.featureRequestStatus || 'none';
       if(status === 'pending') return `<span class="status-badge status-pending">已申请精选</span>`;
-      if(status === 'rejected') return `<><span class="status-badge status-rejected">申请未通过</span><button class="btn small ghost" type="button" data-request-feature="${item.id}">再次申请</button></>`;
+      if(status === 'rejected') return `<span class="status-badge status-rejected">申请未通过</span><button class="btn small ghost" type="button" data-request-feature="${item.id}">再次申请</button>`;
       if(status === 'approved') return `<span class="status-badge status-pending">已入精选</span>`;
       return `<button class="btn small ghost" type="button" data-request-feature="${item.id}">申请加入精选</button>`;
     }
@@ -361,6 +364,7 @@
     function openModal(src, caption){ if(!src) return; modalImage.src = src; modalCaption.textContent = caption || '愿这一刻被温柔记住。'; imageModal.classList.add('active'); }
     function closeModal(){ imageModal.classList.remove('active'); modalImage.src = ''; }
     function escapeHtml(text){ return String(text).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
+    boot();
   </script>
 </body>
 </html>
