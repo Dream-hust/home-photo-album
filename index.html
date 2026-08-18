@@ -66,7 +66,7 @@
   <div class="shell" id="appShell" style="display:none;">
     <header class="topbar panel">
       <div class="brand"><b>家庭相册</b></div>
-      <nav class="nav"><a href="#home">首页</a><a href="#featured">精选集锦</a><a href="#people">成员入口</a><a href="./upload.html">上传入口</a><button class="logout-pill" id="logoutBtn" type="button">退出登录</button></nav>
+      <nav class="nav"><a href="#home">首页</a><a href="#featured">精选集锦</a><a href="#people">成员入口</a><a href="./upload.html">上传入口</a><button class="logout-pill" id="adminBtn" type="button">管理员入口</button><button class="logout-pill" id="logoutBtn" type="button">退出登录</button></nav>
     </header>
 
     <section class="hero" id="home">
@@ -178,6 +178,7 @@
     const appShell = document.getElementById('appShell');
     let isUnlocked = false;
     let isAdmin = false;
+    let adminUnlocked = false;
     const familyPassword = document.getElementById('familyPassword');
     const unlockBtn = document.getElementById('unlockBtn');
     const gateError = document.getElementById('gateError');
@@ -186,6 +187,11 @@
     const reviewList = document.getElementById('reviewList');
     const boardView = document.getElementById('boardView');
     const logoutBtn = document.getElementById('logoutBtn');
+    const adminBtn = document.getElementById('adminBtn');
+    const adminGate = document.getElementById('adminGate');
+    const adminPassword = document.getElementById('adminPassword');
+    const adminUnlockBtn = document.getElementById('adminUnlockBtn');
+    const adminGateError = document.getElementById('adminGateError');
     const boardGallery = document.getElementById('boardGallery');
     const boardStories = document.getElementById('boardStories');
     const boardTitle = document.getElementById('boardTitle');
@@ -206,19 +212,25 @@
       try { closeModalBtn?.addEventListener('click', closeModal); } catch {}
       try { imageModal?.addEventListener('click', (event) => { if(event.target === imageModal) closeModal(); }); } catch {}
       try { logoutBtn?.addEventListener('click', logoutSite); } catch {}
+      try { adminBtn?.addEventListener('click', openAdminGate); } catch {}
+      try { adminUnlockBtn?.addEventListener('click', unlockAdmin); } catch {}
+      try { adminPassword?.addEventListener('keydown', (event) => { if(event.key === 'Enter') unlockAdmin(); }); } catch {}
       try { const wishBox = document.getElementById('wishBox'); if(wishBox) wishBox.textContent = WISHES[Math.floor(Math.random() * WISHES.length)]; } catch {}
 
       initAccess();
       hydrateFromCloud();
     };
 
-    function initAccess(){ try{ clearAccess(); isUnlocked = false; isAdmin = false; closeSite(); }catch{ closeSite(); } }
+    function initAccess(){ try{ clearAccess(); isUnlocked = false; isAdmin = false; adminUnlocked = false; closeSite(); closeAdminGate(); }catch{ closeSite(); } }
     function hasAccess(){ try{ const raw = localStorage.getItem(ACCESS_KEY); if(!raw) return false; const parsed = JSON.parse(raw); return !!(parsed && parsed.until && Date.now() < parsed.until); }catch{return false;} }
     function clearAccess(){ try{ localStorage.removeItem(ACCESS_KEY); }catch{} }
-    function unlockSite(){ try{ const value = familyPassword?.value.trim() || ''; if(!value){ gateError.textContent='请先输入家庭密码。'; return; } if(value !== FAMILY_PASSWORD){ gateError.textContent='密码不对，再试一次。'; return; } isUnlocked = true; isAdmin = false; gateError.textContent=''; openSite(); }catch(error){ gateError.textContent = error?.message || '无法解锁'; } }
-    function logoutSite(){ try{ isUnlocked = false; isAdmin = false; clearAccess(); closeSite(); render(); }catch(error){ console.error('logout_failed', error); } }
+    function unlockSite(){ try{ const value = familyPassword?.value.trim() || ''; if(!value){ gateError.textContent='请先输入家庭密码。'; return; } if(value !== FAMILY_PASSWORD){ gateError.textContent='密码不对，再试一次。'; return; } isUnlocked = true; isAdmin = false; adminUnlocked = false; gateError.textContent=''; closeAdminGate(); openSite(); }catch(error){ gateError.textContent = error?.message || '无法解锁'; } }
+    function logoutSite(){ try{ isUnlocked = false; isAdmin = false; adminUnlocked = false; clearAccess(); closeAdminGate(); closeSite(); render(); }catch(error){ console.error('logout_failed', error); } }
     function openSite(){ try{ familyGate?.classList.add('hidden'); if(appShell) appShell.style.display=''; document.body.classList.remove('locked'); render(); }catch(error){ console.error('open_site_failed', error); document.body.classList.remove('locked'); } }
     function closeSite(){ try{ familyGate?.classList.remove('hidden'); if(appShell) appShell.style.display='none'; document.body.classList.add('locked'); if(familyPassword){ familyPassword.value=''; setTimeout(() => familyPassword.focus(), 50); } }catch(error){ console.error('close_site_failed', error); } }
+    function openAdminGate(){ try{ if(!isUnlocked) return; adminGate?.classList.remove('hidden'); adminPassword?.focus(); }catch{} }
+    function closeAdminGate(){ try{ adminGate?.classList.add('hidden'); if(adminPassword){ adminPassword.value=''; } if(adminGateError) adminGateError.textContent=''; }catch{} }
+    function unlockAdmin(){ try{ const value = adminPassword?.value.trim() || ''; if(!value){ adminGateError.textContent='请输入管理员密码。'; return; } if(value !== ADMIN_PASSWORD){ adminGateError.textContent='管理员密码不对。'; return; } adminUnlocked = true; isAdmin = true; adminGateError.textContent=''; closeAdminGate(); render(); }catch(error){ if(adminGateError) adminGateError.textContent = error?.message || '管理员解锁失败'; } }
 
     async function hydrateFromCloud(){
       if(!supabaseClient){ render(); return; }
