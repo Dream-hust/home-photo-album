@@ -179,6 +179,7 @@
     let isUnlocked = false;
     let isAdmin = false;
     let adminUnlocked = false;
+    let accessStage = 'locked';
     const familyPassword = document.getElementById('familyPassword');
     const unlockBtn = document.getElementById('unlockBtn');
     const gateError = document.getElementById('gateError');
@@ -221,16 +222,16 @@
       hydrateFromCloud();
     };
 
-    function initAccess(){ try{ clearAccess(); isUnlocked = false; isAdmin = false; adminUnlocked = false; closeSite(); closeAdminGate(); }catch{ closeSite(); } }
+    function initAccess(){ try{ clearAccess(); isUnlocked = false; isAdmin = false; adminUnlocked = false; accessStage = 'locked'; closeSite(); closeAdminGate(); }catch{ closeSite(); } }
     function hasAccess(){ try{ const raw = localStorage.getItem(ACCESS_KEY); if(!raw) return false; const parsed = JSON.parse(raw); return !!(parsed && parsed.until && Date.now() < parsed.until); }catch{return false;} }
     function clearAccess(){ try{ localStorage.removeItem(ACCESS_KEY); }catch{} }
-    function unlockSite(){ try{ const value = familyPassword?.value.trim() || ''; if(!value){ gateError.textContent='请先输入家庭密码。'; return; } if(value !== FAMILY_PASSWORD){ gateError.textContent='密码不对，再试一次。'; return; } isUnlocked = true; isAdmin = false; adminUnlocked = false; gateError.textContent=''; closeAdminGate(); openSite(); }catch(error){ gateError.textContent = error?.message || '无法解锁'; } }
-    function logoutSite(){ try{ isUnlocked = false; isAdmin = false; adminUnlocked = false; clearAccess(); closeAdminGate(); closeSite(); render(); }catch(error){ console.error('logout_failed', error); } }
+    function unlockSite(){ try{ const value = familyPassword?.value.trim() || ''; if(!value){ gateError.textContent='请先输入家庭密码。'; return; } if(value !== FAMILY_PASSWORD){ gateError.textContent='密码不对，再试一次。'; return; } isUnlocked = true; isAdmin = false; adminUnlocked = false; accessStage = 'family'; gateError.textContent=''; closeAdminGate(); openSite(); }catch(error){ gateError.textContent = error?.message || '无法解锁'; } }
+    function logoutSite(){ try{ isUnlocked = false; isAdmin = false; adminUnlocked = false; accessStage = 'locked'; clearAccess(); closeAdminGate(); closeSite(); render(); }catch(error){ console.error('logout_failed', error); } }
     function openSite(){ try{ familyGate?.classList.add('hidden'); if(appShell) appShell.style.display=''; document.body.classList.remove('locked'); render(); }catch(error){ console.error('open_site_failed', error); document.body.classList.remove('locked'); } }
     function closeSite(){ try{ familyGate?.classList.remove('hidden'); if(appShell) appShell.style.display='none'; document.body.classList.add('locked'); if(familyPassword){ familyPassword.value=''; setTimeout(() => familyPassword.focus(), 50); } }catch(error){ console.error('close_site_failed', error); } }
     function openAdminGate(){ try{ if(!isUnlocked) return; adminGate?.classList.remove('hidden'); adminPassword?.focus(); }catch{} }
     function closeAdminGate(){ try{ adminGate?.classList.add('hidden'); if(adminPassword){ adminPassword.value=''; } if(adminGateError) adminGateError.textContent=''; }catch{} }
-    function unlockAdmin(){ try{ const value = adminPassword?.value.trim() || ''; if(!value){ adminGateError.textContent='请输入管理员密码。'; return; } if(value !== ADMIN_PASSWORD){ adminGateError.textContent='管理员密码不对。'; return; } adminUnlocked = true; isAdmin = true; adminGateError.textContent=''; closeAdminGate(); render(); }catch(error){ if(adminGateError) adminGateError.textContent = error?.message || '管理员解锁失败'; } }
+    function unlockAdmin(){ try{ const value = adminPassword?.value.trim() || ''; if(!value){ adminGateError.textContent='请输入管理员密码。'; return; } if(value !== ADMIN_PASSWORD){ adminGateError.textContent='管理员密码不对。'; return; } adminUnlocked = true; isAdmin = true; accessStage = 'admin'; adminGateError.textContent=''; closeAdminGate(); render(); }catch(error){ if(adminGateError) adminGateError.textContent = error?.message || '管理员解锁失败'; } }
 
     async function hydrateFromCloud(){
       if(!supabaseClient){ render(); return; }
@@ -304,6 +305,7 @@
       document.getElementById('latestDay').textContent = allPhotos[0]?.date || state.stories[0]?.date || '-';
       const adminBadge = document.getElementById('adminBadge');
       if(adminBadge) adminBadge.textContent = isAdmin ? '管理员模式' : '家庭成员模式';
+      if(adminBtn) adminBtn.textContent = isAdmin ? '管理员已开启' : '管理员入口';
       peopleGrid.innerHTML = PEOPLE.map(person => {
         const personPhotos = allPhotos.filter(photo => photo.personId === person.id);
         const latest = personPhotos[0]?.date || '-';
@@ -355,9 +357,11 @@
       boardName.textContent = person?.name || '-';
       boardSummary.textContent = latest ? `愿 ${person?.name || '这位家人'} 的每个平凡日常，都在多年以后依然闪闪发亮。` : `愿 ${person?.name || '这个人'} 的相册，慢慢装满温暖。`;
       memberStats.innerHTML = `<div class="member-stat"><small>照片数量</small><b>${rawPhotos.length}</b></div><div class="member-stat"><small>精选数量</small><b>${rawFeatured.length}</b></div><div class="member-stat"><small>最近日期</small><b>${latest?.date || '-'}</b></div>`;
+      const memberCanManage = isAdmin;
+      const memberCanRequest = isUnlocked && !isAdmin;
       const galleryHtml = [];
-      if(rawFeatured.length) galleryHtml.push(...rawFeatured.map(item => renderPhotoCard(item, person?.name || '精选', true)));
-      if(rawPhotos.length) galleryHtml.push(...rawPhotos.map(item => renderPhotoCard(item, person?.name || '照片', false)));
+      if(rawFeatured.length) galleryHtml.push(...rawFeatured.map(item => renderPhotoCard(item, person?.name || '精选', true, memberCanManage, memberCanRequest)));
+      if(rawPhotos.length) galleryHtml.push(...rawPhotos.map(item => renderPhotoCard(item, person?.name || '照片', false, memberCanManage, memberCanRequest)));
       boardGallery.innerHTML = galleryHtml.length ? galleryHtml.join('') : `<div class="empty" style="grid-column:1/-1">这一页暂时还没有照片。</div>`;
       boardGallery.querySelectorAll('img[data-full]').forEach(img => img.addEventListener('click', () => openModal(img.dataset.full, img.dataset.caption)));
       boardGallery.querySelectorAll('[data-remove-photo]').forEach(btn => btn.addEventListener('click', () => removePhoto(btn.dataset.removePhoto)));
@@ -365,9 +369,9 @@
       boardStories.innerHTML = stories.length ? stories.map(item => `<article class="story-card"><div class="story-head"><b>${escapeHtml(item.title)}</b><span class="story-date">${item.date}</span></div><p>${escapeHtml(item.content)}</p>${isAdmin ? `<div style="margin-top:14px"><button class="btn small danger" type="button" data-remove-story="${item.id}">删除</button></div>` : ''}</article>`).join('') : `<div class="empty">这一页暂时还没有记录。</div>`;
     }
 
-    function renderPhotoCard(item, fallbackName, isFeatured){
-      const requestArea = isFeatured ? '' : renderFeatureRequestArea(item);
-      const adminActions = isAdmin ? `<button class="btn small danger" type="button" data-remove-photo="${item.id}">删除</button>` : '';
+    function renderPhotoCard(item, fallbackName, isFeatured, memberCanManage, memberCanRequest){
+      const requestArea = isFeatured ? '' : (memberCanRequest ? renderFeatureRequestArea(item) : '');
+      const adminActions = memberCanManage ? `<button class="btn small danger" type="button" data-remove-photo="${item.id}">删除</button>` : '';
       return `<article class="photo-card${isFeatured ? ' featured-in-board' : ''}"><img class="photo-thumb" src="${item.src}" alt="${escapeHtml(item.caption || fallbackName)}" data-full="${item.src}" data-caption="${escapeHtml(item.caption || '愿这一刻被温柔记住。')}" /><div class="photo-body"><div class="photo-title">${escapeHtml(item.caption || '愿每一张照片都留下温度。')}</div><div class="photo-meta">${item.date || '-'}${isFeatured ? ' · 精选' : ''}</div><div class="photo-actions">${requestArea}${adminActions}</div></div></article>`;
     }
 
